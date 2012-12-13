@@ -29,8 +29,8 @@ class Wikipedia(callbacks.Plugin):
     This should describe *how* to use this plugin."""
     threaded = True
 
-    def _remove_accents(self, data):
-        nkfd_form = unicodedata.normalize('NFKD', unicode(data))
+    def _removeaccents(self, string):
+        nkfd_form = unicodedata.normalize('NFKD', unicode(string))
         return u"".join([c for c in nkfd_form if not unicodedata.combining(c)])
 
     def _red(self, string):
@@ -41,7 +41,7 @@ class Wikipedia(callbacks.Plugin):
         """bold and underline string."""
         return ircutils.bold(ircutils.underline(string))
     
-    def _unicode_urlencode(self, params):
+    def _unicodeurlencode(self, params):
         """
         A unicode aware version of urllib.urlencode.
         Borrowed from pyfacebook :: http://github.com/sciyoshi/pyfacebook/
@@ -50,10 +50,10 @@ class Wikipedia(callbacks.Plugin):
             params = params.items()
         return urllib.urlencode([(k, isinstance(v, unicode) and v.encode('utf-8') or v) for k, v in params])
 
-    def unwiki(self, wiki):
+    def _unwiki(self, wiki):
         """
-       Remove wiki markup from the text.
-       """
+        Remove wiki markup from the text.
+        """
         wiki = re.sub(r'(?i)\{\{IPA(\-[^\|\{\}]+)*?\|([^\|\{\}]+)(\|[^\{\}]+)*?\}\}', lambda m: m.group(2), wiki)
         wiki = re.sub(r'(?i)\{\{Lang(\-[^\|\{\}]+)*?\|([^\|\{\}]+)(\|[^\{\}]+)*?\}\}', lambda m: m.group(2), wiki)
         wiki = re.sub(r'\{\{[^\{\}]+\}\}', '', wiki)
@@ -69,20 +69,32 @@ class Wikipedia(callbacks.Plugin):
         wiki = re.sub(r'\[[^\[\]]*? ([^\[\]]*?)\]', lambda m: m.group(1), wiki)
         wiki = re.sub(r"''+", '', wiki)
         wiki = re.sub(r'(?m)^\*$', '', wiki)
-       
+        wiki = re.sub(r'\<ref.*?\</ref\>', '', wiki) #removes spanning ref tags
+        wiki = re.sub(r'\<.*?\>', '', wiki) #removes individual tags ex <ref />
+        wiki = re.sub(r'\{\{[^{{]*?\}\}', '', wiki) #removes {{qwerty}}
+        wiki = re.sub(r'\{\{[^{{]*?\}\}', '', wiki) #repeated to removed embedded {{}}
+        wiki = re.sub(r'\{\{[^{{]*?\}\}', '', wiki)
+        wiki = re.sub(r'\[\[(?P<tag>[^|]*?)\]\]', '\g<tag>', wiki) #replaces [[tag]] with tag if | not in tag
+        wiki = re.sub(r'\[\[(File|Image).*?\[\[.*?\]\].*?\]\]', '', wiki) #removes [[File/Image...[[...]]...]]
+        wiki = re.sub(r'\[\[(File|Image).*?\]\]', '', wiki) #removes [[Files/Image...]]
+        wiki = re.sub(r'\[\[.*?\|(?P<tag2>.*?)\]\]', '\g<tag2>', wiki) #replaces [[link|text]] with text
+        wiki = wiki.replace('\'\'\'', '') #removes '''
+        wiki = wiki.replace('&nbsp;', ' ') #removes no break spaces
+        wiki = wiki.replace(u'–','-')
         return wiki
    
-    def unhtml(self, html):
+    def _unhtml(self, html):
         """
-       Remove HTML from the text.
-       """
+        Remove HTML from the text.
+        """
         html = re.sub(r'(?i)&nbsp;', ' ', html)
         html = re.sub(r'(?i)<br[ \\]*?>', '\n', html)
         html = re.sub(r'(?m)<!--.*?--\s*>', '', html)
         html = re.sub(r'(?i)<ref[^>]*>[^>]*<\/ ?ref>', '', html)
         html = re.sub(r'(?m)<.*?>', '', html)
         html = re.sub(r'(?i)&amp;', '&', html)
-       
+        #html = re.sub(r'[ ]+', ' ', html) # multiplespaces
+        html = html.replace(u'–','-') # unicode - 
         return html
    
     def punctuate(self, text):
@@ -120,42 +132,61 @@ class Wikipedia(callbacks.Plugin):
         text = text.replace('\'\'\'', '') #removes '''
         text = text.replace('&nbsp;', ' ') #removes no break spaces
         text = text.replace(u'–','-')
+        text = text.replace("\'","'")
+        text = re.sub('<[^>]+>', '', text)
+        text = re.sub(' ([.,!?\'])', '\\1', text)
         return text.strip()
     
+    # https://en.wikipedia.org/w/api.php?action=query&prop=extracts&titles=Albert%20Einstein&explaintext&format=json
+    # http://en.wikipedia.org/w/api.php?format=json&action=query&prop=revisions&titles=Stack%20Overflow&rvprop=content&rvsection=0&rvparse
+    # https://github.com/j2labs/wikipydia/blob/master/wikipydia/__init__.py
+    # http://en.wikipedia.org/w/api.php?action=parse&page=Germanist&format=json&redirects=1&disablepp=1&section=0
     def wikipedia(self, irc, msg, args, optlist, optinput):
         """<term>
         Searches Wikipedia for <term>. 
         """
         
+        # works by default but make sure we have a wikiUrl.
         url = self.registryValue('wikiUrl')
         if not url or url == "Not set":
-            irc.reply("Wolfram Alpha API key not set. see 'config help supybot.plugins.Wikipedia.wikiUrl'")
+            irc.reply("Wolfram Alpha URL not set. see 'config help supybot.plugins.Wikipedia.wikiUrl'")
             return
              
-        urlArgs = {'action':'query','prop':'revisions','rvsection':'0','titles':optinput,'rvprop':'content','format':'json','redirects':'1'}
+        urlArgs = {'action':'parse','page':optinput,'format':'json','redirects':'1','disablepp':'1'} #,'section':'0'}
                     
-        request = urllib2.Request(url, data=self._unicode_urlencode(urlArgs), headers={'User-Agent':'Mozilla/5.0'})
+        request = urllib2.Request(url, data=self._unicodeurlencode(urlArgs), headers={'User-Agent':'Mozilla/5.0'})
+        self.log.info(url)
+        self.log.info(str(urlArgs))
         result = urllib2.urlopen(request)
-        jsondata = json.loads(result.read().decode('utf-8'))
-
-        if 'redirects' in jsondata['query'].keys():
-            redirectsto = jsondata['query']['redirects'][0]['to']
-            redirectsfrom = jsondata['query']['redirects'][0]['from']
-            irc.reply("Redirects: {0} from {1}".format(redirectsto, redirectsfrom))
-
-        resultkeys = []
-        for page in jsondata['query']['pages']:
-            resultkeys.append(page)
-
-        if len(resultkeys) < 1:
-            irc.reply("Something broke getting results looking up: {0}".format(optinput))
+        jsondata = json.loads(result.read())
+        
+        # look to see if there is an error and handle it.
+        jsonerror = jsondata.get('error', None)
+        if jsonerror:
+            errorcode = jsonerror['code']
+            errorinfo = jsonerror['info']
+            irc.reply("ERROR looking up {0} :: {1} looking up: {2}".format(optinput, errorcode, errorinfo))
             return
-        
-        output = jsondata['query']['pages'][resultkeys[0]]
-        outputtitle = str(output['title'])
-        
-        outputcontent = output['revisions'][0]['*']
-        outputcontent = self._remove_accents(self._parse(outputcontent))
+            
+        # if no errors, move into parse with one last error check.
+        jsondata = jsondata.get('parse', None)
+        if not jsondata:
+            irc.reply("Big error. Check logs/code.")
+            return
+      
+        # handle redirects
+        redirects = jsondata.get('redirects', None)
+        if redirects:
+            # redirectsto = redirects.get('to', None)
+            # redirectsfrom = redirects.get('from', None)
+            irc.reply(redirects)
+            
+        outputcontent = jsondata['text']['*']
+        outputtitle = jsondata['displaytitle']
+        outputcontent = self._unhtml(outputcontent)
+        outputcontent = outputcontent.replace('\n','').replace('\r','')
+        outputcontent = self._unwiki(outputcontent)
+        outputcontent = self._removeaccents(outputcontent.encode('ascii', 'ignore'))
         
         irc.reply("{0}".format(outputtitle))
         irc.reply("{0}".format(outputcontent))
@@ -163,6 +194,22 @@ class Wikipedia(callbacks.Plugin):
     wikipedia = wrap(wikipedia, [getopts({}), ('text')])
     
     def wikisearch(self, irc, msg, args, optlist, optinput):
+        # http://codereview.stackexchange.com/questions/17861/python-class-review-wiki-api-getter
+        # http://en.wikipedia.org/w/api.php?action=opensearch&search=Germany&format=xml
+        # http://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=Germany&srwhat=text&srlimit=10&format=json
+        #from SPARQLWrapper import SPARQLWrapper, JSON
+
+        #sparql = SPARQLWrapper("http://dbpedia.org/sparql")
+        #sparql.setQuery("""
+        #    PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+        #    SELECT ?label
+        #    WHERE { <http://dbpedia.org/resource/Asturias> rdfs:label ?label }
+        #    """)
+        #sparql.setReturnFormat(JSON)
+        #results = sparql.query().convert()
+
+        #for result in results["results"]["bindings"]:
+        #    print(result["label"]["value"])
         pass
     wikisearch = wrap(wikisearch, [getopts({}), ('text')])
 
