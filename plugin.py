@@ -46,6 +46,7 @@ class Wikipedia(callbacks.Plugin):
         return urlencode([(k, isinstance(v, unicode) and v.encode('utf-8') or v) for k, v in params])
 
     def _removeWikiNoise(self, wiki):
+        """Remove wikipedia cruft in output to display better."""
         wiki = re.sub(r'(?i)\{\{IPA(\-[^\|\{\}]+)*?\|([^\|\{\}]+)(\|[^\{\}]+)*?\}\}', lambda m: m.group(2), wiki)
         wiki = re.sub(r'(?i)\{\{Lang(\-[^\|\{\}]+)*?\|([^\|\{\}]+)(\|[^\{\}]+)*?\}\}', lambda m: m.group(2), wiki)
         wiki = re.sub(r'\{\{[^\{\}]+\}\}', '', wiki)
@@ -77,7 +78,7 @@ class Wikipedia(callbacks.Plugin):
     
     # wiki stats? http://stats.grok.se
     def wikipedia(self, irc, msg, args, optlist, optinput):
-        """[--options] <term>
+        """<term>
         Searches Wikipedia for <term>. 
         """
         
