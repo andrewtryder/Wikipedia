@@ -156,7 +156,7 @@ class Wikipedia(callbacks.Plugin):
             return
         
         # arguments for output
-        args = {'num':'10', 'snippets':False}
+        args = {'num':self.registryValue('numberOfSearchResults'), 'snippets':False}
         
         # manip args via getopts (optlist)
         if optlist:
