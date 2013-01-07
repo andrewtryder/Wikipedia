@@ -49,6 +49,7 @@ class Wikipedia(callbacks.Plugin):
         regex = re.compile("\x1f|\x02|\x12|\x0f|\x16|\x03(?:\d{1,2}(?:,\d{1,2})?)?", re.UNICODE)
         return regex.sub('', string)
 
+    # http://en.wikipedia.org/wiki/Wikipedia:WikiProject_User_scripts/Scripts/Formatter
     def _removeWikiNoise(self, wiki):
         """Remove wikipedia cruft in output to display better."""
         wiki = re.sub(r'(?i)\{\{IPA(\-[^\|\{\}]+)*?\|([^\|\{\}]+)(\|[^\{\}]+)*?\}\}', lambda m: m.group(2), wiki)
@@ -150,12 +151,12 @@ class Wikipedia(callbacks.Plugin):
         
     wikipedia = wrap(wikipedia, [getopts({}), ('text')])
     
-    # http://en.wikipedia.org/w/api.php?action=opensearch&search=Germany&format=xml
     def wikisearch(self, irc, msg, args, optlist, optinput):
-        """[--num #|--snippets] <term>
+        """[--num #|--snippets|--links] <term>
         Perform a Wikipedia search for <term>
         Use --num (between 10 and 30) to specify results.
-        Use --snippets to display text snippets. (Will flood)
+        Use --snippets to display text snippets. (NOTICE: is rather verbose..)
+        Use --links to display a link to each article.
         """
         
         url = self.registryValue('wikiUrl')
@@ -164,7 +165,7 @@ class Wikipedia(callbacks.Plugin):
             return
         
         # arguments for output
-        args = {'num':self.registryValue('numberOfSearchResults'), 'snippets':False}
+        args = {'num':self.registryValue('numberOfSearchResults'),'snippets':False,'links':False}
         
         # manip args via getopts (optlist)
         if optlist:
@@ -177,9 +178,11 @@ class Wikipedia(callbacks.Plugin):
                         return
                 if key == "snippets":
                     args['snippets'] = True
+                if key == "links":
+                    args['links'] = True
                     
         # prep url
-        urlArgs = {'action':'query','list':'search','srsearch':optinput,'srwhat':'text','srlimit':args['num'],'format':'json','srprop':'snippet'} 
+        urlArgs = {'action':'query','list':'search','srsearch':optinput,'srwhat':'text','srlimit':args['num'],'format':'json','srprop':'snippet','meta':'siteinfo'} 
         request = urllib2.Request(url, data=self._unicodeurlencode(urlArgs), headers={'User-agent':'Mozilla/5.0 (Windows NT 6.1; rv:15.0) Gecko/20120716 Firefox/15.0a2'})
         
         # now try to fetch.
@@ -213,28 +216,34 @@ class Wikipedia(callbacks.Plugin):
                 jsondata['query']['searchinfo']['suggestion']))
             return
         
+        # for links.
+        wikilink = 'http:'+jsondata['query']['general']['server']+jsondata['query']['general']['articlepath'].replace('$1','')
+        
         # iterate through search results and throw into a dict.
         searchresults = {}
         for i,result in enumerate(jsondata['query']['search']):
             tmpdict = {}
             tmpdict['title'] = result['title'].encode('utf-8')
+            tmpdict['link'] = wikilink + result['title'].encode('utf-8').replace(' ','_')
             tmpdict['snippet'] = self._removeWikiNoise(result['snippet']).encode('utf-8')
             searchresults[i] = tmpdict
         
         # work with searchresults data.
-        if args['snippets']:
-            output = "Results for {0} :: {1}".format(self._red(optinput),\
-                " | ".join([self._bu(item['title']) + " " + item['snippet'] for item in searchresults.values()]))
-        else:
-            output = "Results for {0} :: {1}".format(self._red(optinput),\
-                " | ".join([item['title'] for item in searchresults.values()]))
+        output = []
+        for item in searchresults.values():
+            tmpstring = "{0}".format(self._bu(item['title']))
+            if args['snippets']:
+                tmpstring += " ({0})".format(item['snippet'])
+            if args['links']:
+                tmpstring += " <{0}>".format(item['link'])
+            output.append(tmpstring)
         
         if self.registryValue('disableANSI'):
-            irc.reply(self._strip(output))
+            irc.reply("Search results for {0} :: {1}".format(optinput,self._strip(" | ".join(output))))
         else:
-            irc.reply(output)
+            irc.reply("Search results for {0} :: {1}".format(self._red(optinput), " | ".join(output)))
         
-    wikisearch = wrap(wikisearch, [getopts({'num':('int'),'snippets':''}), ('text')])
+    wikisearch = wrap(wikisearch, [getopts({'num':('int'),'links':'','snippets':''}), ('text')])
 
 Class = Wikipedia
 
