@@ -45,6 +45,10 @@ class Wikipedia(callbacks.Plugin):
             params = params.items()
         return urlencode([(k, isinstance(v, unicode) and v.encode('utf-8') or v) for k, v in params])
 
+    def _strip(self, string): # from http://bit.ly/X0vm6K
+        regex = re.compile("\x1f|\x02|\x12|\x0f|\x16|\x03(?:\d{1,2}(?:,\d{1,2})?)?", re.UNICODE)
+        return regex.sub('', string)
+
     def _removeWikiNoise(self, wiki):
         """Remove wikipedia cruft in output to display better."""
         wiki = re.sub(r'(?i)\{\{IPA(\-[^\|\{\}]+)*?\|([^\|\{\}]+)(\|[^\{\}]+)*?\}\}', lambda m: m.group(2), wiki)
@@ -137,8 +141,12 @@ class Wikipedia(callbacks.Plugin):
             outputtitle = "{0} (redirect from: {1})".format(self._red(wikipagetitle.encode('utf-8')),redirectsfrom)
         else:
             outputtitle = "{0}".format(self._red(wikipagetitle.encode('utf-8')))
-        # finally, output.   
-        irc.reply("{0} :: {1}".format(outputtitle,outputcontent))
+        
+        # finally, output.
+        if self.registryValue('disableANSI'):
+            irc.reply(self._strip("{0} :: {1}".format(outputtitle,outputcontent)))
+        else:
+            irc.reply("{0} :: {1}".format(outputtitle,outputcontent))
         
     wikipedia = wrap(wikipedia, [getopts({}), ('text')])
     
@@ -213,12 +221,19 @@ class Wikipedia(callbacks.Plugin):
             tmpdict['snippet'] = self._removeWikiNoise(result['snippet']).encode('utf-8')
             searchresults[i] = tmpdict
         
+        # work with searchresults data.
         if args['snippets']:
-            irc.reply("Results for {0} :: {1}".format(self._red(optinput),\
-                " | ".join([self._bu(item['title']) + " " + item['snippet'] for item in searchresults.values()])))
+            output = "Results for {0} :: {1}".format(self._red(optinput),\
+                " | ".join([self._bu(item['title']) + " " + item['snippet'] for item in searchresults.values()]))
         else:
-            irc.reply("Results for {0} :: {1}".format(self._red(optinput),\
-                " | ".join([item['title'] for item in searchresults.values()])))
+            output = "Results for {0} :: {1}".format(self._red(optinput),\
+                " | ".join([item['title'] for item in searchresults.values()]))
+        
+        if self.registryValue('disableANSI'):
+            irc.reply(self._strip(output))
+        else:
+            irc.reply(output)
+        
     wikisearch = wrap(wikisearch, [getopts({'num':('int'),'snippets':''}), ('text')])
 
 Class = Wikipedia
