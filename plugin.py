@@ -1,17 +1,16 @@
 # -*- coding: utf-8 -*-
 ###
-# Copyright (c) 2012, spline
+# Copyright (c) 2013, spline
 # All rights reserved.
 #
 #
 ###
 
 # my libs
-import unicodedata
 import json
 import urllib2
-import urllib
 import re
+from urllib import urlencode
 
 # supybot libs
 import supybot.utils as utils
@@ -29,10 +28,6 @@ class Wikipedia(callbacks.Plugin):
     This should describe *how* to use this plugin."""
     threaded = True
 
-    def _removeaccents(self, string):
-        nkfd_form = unicodedata.normalize('NFKD', unicode(string))
-        return u"".join([c for c in nkfd_form if not unicodedata.combining(c)])
-
     def _red(self, string):
         """return a red string."""
         return ircutils.mircColor(string, 'red')
@@ -48,7 +43,37 @@ class Wikipedia(callbacks.Plugin):
         """
         if isinstance(params, dict):
             params = params.items()
-        return urllib.urlencode([(k, isinstance(v, unicode) and v.encode('utf-8') or v) for k, v in params])
+        return urlencode([(k, isinstance(v, unicode) and v.encode('utf-8') or v) for k, v in params])
+
+    def _removeWikiNoise(self, wiki):
+        wiki = re.sub(r'(?i)\{\{IPA(\-[^\|\{\}]+)*?\|([^\|\{\}]+)(\|[^\{\}]+)*?\}\}', lambda m: m.group(2), wiki)
+        wiki = re.sub(r'(?i)\{\{Lang(\-[^\|\{\}]+)*?\|([^\|\{\}]+)(\|[^\{\}]+)*?\}\}', lambda m: m.group(2), wiki)
+        wiki = re.sub(r'\{\{[^\{\}]+\}\}', '', wiki)
+        wiki = re.sub(r'(?m)\{\{[^\{\}]+\}\}', '', wiki)
+        wiki = re.sub(r'(?m)\{\|[^\{\}]*?\|\}', '', wiki)
+        wiki = re.sub(r'\(.?\[Image\].*?\)', '', wiki)
+        wiki = re.sub(r'\s\(.*?\[Listen\].*?\)', '', wiki)
+        wiki = re.sub(r'(?i)\[\[Image:[^\[\]]*?\]\]', '', wiki)
+        wiki = re.sub(r'(?i)\[\[File:[^\[\]]*?\]\]', '', wiki)
+        wiki = re.sub(r'\[\[[^\[\]]*?\|([^\[\]]*?)\]\]', lambda m: m.group(1), wiki)
+        wiki = re.sub(r'\[\[([^\[\]]+?)\]\]', lambda m: m.group(1), wiki)
+        wiki = re.sub(r'\[\[([^\[\]]+?)\]\]', '', wiki)
+        wiki = re.sub(r'(?i)File:[^\[\]]*?', '', wiki)
+        wiki = re.sub(r'\[[^\[\]]*? ([^\[\]]*?)\]', lambda m: m.group(1), wiki)
+        wiki = re.sub(r"''+", '', wiki)
+        wiki = re.sub(r'(?m)^\*$', '', wiki)
+        #Remove HTML from the text.
+        wiki = re.sub(r'(?i)&nbsp;', ' ', wiki)
+        wiki = re.sub(r'(?i)<br[ \\]*?>', '\n', wiki)
+        wiki = re.sub(r'(?m)<!--.*?--\s*>', '', wiki)
+        wiki = re.sub(r'(?i)<ref[^>]*>[^>]*<\/ ?ref>', '', wiki)
+        wiki = re.sub(r'(?m)<.*?>', '', wiki)
+        wiki = re.sub(r'(?i)&amp;', '&', wiki)
+        #Remove -
+        wiki = wiki.replace(u'–','-')
+        #Remove trailing white spaces
+        wiki = ' '.join(wiki.split())
+        return wiki
 
     def _unwiki(self, wiki):
         """
@@ -137,81 +162,150 @@ class Wikipedia(callbacks.Plugin):
         text = re.sub(' ([.,!?\'])', '\\1', text)
         return text.strip()
     
-    # https://en.wikipedia.org/w/api.php?action=query&prop=extracts&titles=Albert%20Einstein&explaintext&format=json
-    # http://en.wikipedia.org/w/api.php?format=json&action=query&prop=revisions&titles=Stack%20Overflow&rvprop=content&rvsection=0&rvparse
-    # https://github.com/j2labs/wikipydia/blob/master/wikipydia/__init__.py
-    # http://en.wikipedia.org/w/api.php?action=parse&page=Germanist&format=json&redirects=1&disablepp=1&section=0
+    # wiki stats? http://stats.grok.se
     def wikipedia(self, irc, msg, args, optlist, optinput):
-        """<term>
+        """[--options] <term>
         Searches Wikipedia for <term>. 
         """
         
-        # works by default but make sure we have a wikiUrl.
         url = self.registryValue('wikiUrl')
         if not url or url == "Not set":
-            irc.reply("Wolfram Alpha URL not set. see 'config help supybot.plugins.Wikipedia.wikiUrl'")
+            irc.reply("wikipedia URL not set. see 'config help supybot.plugins.Wikipedia.wikiUrl'")
             return
-             
-        urlArgs = {'action':'parse','page':optinput,'format':'json','redirects':'1','disablepp':'1'} #,'section':'0'}
-                    
-        request = urllib2.Request(url, data=self._unicodeurlencode(urlArgs), headers={'User-Agent':'Mozilla/5.0'})
-        self.log.info(url)
-        self.log.info(str(urlArgs))
-        result = urllib2.urlopen(request)
-        jsondata = json.loads(result.read())
         
-        # look to see if there is an error and handle it.
-        jsonerror = jsondata.get('error', None)
-        if jsonerror:
-            errorcode = jsonerror['code']
-            errorinfo = jsonerror['info']
-            irc.reply("ERROR looking up {0} :: {1} looking up: {2}".format(optinput, errorcode, errorinfo))
+        # prep url     
+        urlArgs = {'action':'query','prop':'extracts','titles':optinput,'format':'json','redirects':'1','indexpageids':'1','exintro':'1','explaintext':'1'}  
+        request = urllib2.Request(url, data=self._unicodeurlencode(urlArgs), headers={'User-agent':'Mozilla/5.0 (Windows NT 6.1; rv:15.0) Gecko/20120716 Firefox/15.0a2'})
+        
+        # now try to fetch.
+        try:
+            result = urllib2.urlopen(request,timeout=10)
+        except urllib2.HTTPError, e:
+            self.log.info('ERROR: Cannot open: {0} HTTP Error code: {1} '.format(url,e.code))
+            irc.reply("HTTP ERROR: {0}".format(e.code))
+            return 
+        except urllib2.URLError, e:
+            self.log.info('ERROR: Cannot open: {0} URL error: {1} '.format(url,e.reason))
+            irc.reply("URLERROR: {0}".format(e.reason))
             return
+        except socket.timeout:
+            irc.reply("Timeout trying to fetch url")
+            return
+        
+        # process json.
+        jsondata = json.loads(result.read().encode('utf-8'))
             
         # if no errors, move into parse with one last error check.
-        jsondata = jsondata.get('parse', None)
-        if not jsondata:
+        if 'query' not in jsondata:
+            self.log.error("Big error looking up {0} url: {1} data: {2}".format(optinput,url,str(jsondata)))
             irc.reply("Big error. Check logs/code.")
             return
-      
+
+        # now that it works, we need the pageid.
+        pageid = jsondata['query'].get('pageids', None)[0]
+        if not pageid or pageid == "-1":
+            irc.reply("ERROR: I could not find a result on Wikipedia for {0}. Try wikisearch.".format(optinput))
+            return
+             
         # handle redirects
-        redirects = jsondata.get('redirects', None)
-        if redirects:
-            # redirectsto = redirects.get('to', None)
-            # redirectsfrom = redirects.get('from', None)
-            irc.reply(redirects)
-            
-        outputcontent = jsondata['text']['*']
-        outputtitle = jsondata['displaytitle']
-        outputcontent = self._unhtml(outputcontent)
-        outputcontent = outputcontent.replace('\n','').replace('\r','')
-        outputcontent = self._unwiki(outputcontent)
-        outputcontent = self._removeaccents(outputcontent.encode('ascii', 'ignore'))
+        if 'redirects' in jsondata['query']:
+            redirectsfrom = jsondata['query']['redirects'][0]['from']
+        else:
+            redirectsfrom = None
         
-        irc.reply("{0}".format(outputtitle))
-        irc.reply("{0}".format(outputcontent))
+        # now fill up our objects with text from the page.
+        wikipagetitle = jsondata['query']['pages'][pageid]['title']
+        wikipagecontent = jsondata['query']['pages'][pageid]['extract']
+        # cleanup content for output and encode
+        outputcontent = self._removeWikiNoise(wikipagecontent).encode('utf-8')
+        # prep title for output.
+        if redirectsfrom:
+            outputtitle = "{0} (redirect from: {1})".format(self._red(wikipagetitle.encode('utf-8')),redirectsfrom)
+        else:
+            outputtitle = "{0}".format(self._red(wikipagetitle.encode('utf-8')))
+        # finally, output.   
+        irc.reply("{0} :: {1}".format(outputtitle,outputcontent))
         
     wikipedia = wrap(wikipedia, [getopts({}), ('text')])
     
+    # http://en.wikipedia.org/w/api.php?action=opensearch&search=Germany&format=xml
     def wikisearch(self, irc, msg, args, optlist, optinput):
-        # http://codereview.stackexchange.com/questions/17861/python-class-review-wiki-api-getter
-        # http://en.wikipedia.org/w/api.php?action=opensearch&search=Germany&format=xml
-        # http://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=Germany&srwhat=text&srlimit=10&format=json
-        #from SPARQLWrapper import SPARQLWrapper, JSON
+        """[--num #|--snippets] <term>
+        Perform a Wikipedia search for <term>
+        Use --num (between 10 and 30) to specify results.
+        Use --snippets to display text snippets. (Will flood)
+        """
+        
+        url = self.registryValue('wikiUrl')
+        if not url or url == "Not set":
+            irc.reply("wikipedia URL not set. see 'config help supybot.plugins.Wikipedia.wikiUrl'")
+            return
+        
+        # arguments for output
+        args = {'num':'10', 'snippets':False}
+        
+        # manip args via getopts (optlist)
+        if optlist:
+            for (key, value) in optlist:
+                if key == "num":
+                    if 10 <= value <= 30:
+                        args['num'] = value
+                    else:
+                        irc.reply("ERROR: wikisearch --num must be between 10 and 30.")
+                        return
+                if key == "snippets":
+                    args['snippets'] = True
+                    
+        # prep url
+        urlArgs = {'action':'query','list':'search','srsearch':optinput,'srwhat':'text','srlimit':args['num'],'format':'json','srprop':'snippet'} 
+        request = urllib2.Request(url, data=self._unicodeurlencode(urlArgs), headers={'User-agent':'Mozilla/5.0 (Windows NT 6.1; rv:15.0) Gecko/20120716 Firefox/15.0a2'})
+        
+        # now try to fetch.
+        try:
+            result = urllib2.urlopen(request,timeout=10)
+        except urllib2.HTTPError, e:
+            self.log.info('ERROR: Cannot open: {0} HTTP Error code: {1} '.format(url,e.code))
+            irc.reply("HTTP ERROR: {0}".format(e.code))
+            return 
+        except urllib2.URLError, e:
+            self.log.info('ERROR: Cannot open: {0} URL error: {1} '.format(url,e.reason))
+            irc.reply("URLERROR: {0}".format(e.reason))
+            return
+        except socket.timeout:
+            irc.reply("Timeout trying to fetch url")
+            return
+        
+        # process json.
+        jsondata = json.loads(result.read().encode('utf-8'))
 
-        #sparql = SPARQLWrapper("http://dbpedia.org/sparql")
-        #sparql.setQuery("""
-        #    PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-        #    SELECT ?label
-        #    WHERE { <http://dbpedia.org/resource/Asturias> rdfs:label ?label }
-        #    """)
-        #sparql.setReturnFormat(JSON)
-        #results = sparql.query().convert()
+        # if no errors, move into parse with one last error check.
+        if 'query' not in jsondata:
+            self.log.error("Big error looking up {0} url: {1} data: {2}".format(optinput,url,str(jsondata)))
+            irc.reply("Big error. Check logs/code.")
+            return
 
-        #for result in results["results"]["bindings"]:
-        #    print(result["label"]["value"])
-        pass
-    wikisearch = wrap(wikisearch, [getopts({}), ('text')])
+        # now that it works, we need to check for results.
+        totalhits = jsondata['query']['searchinfo']['totalhits']
+        if totalhits < 1:
+            irc.reply("ERROR: I could not find a result on Wikipedia for {0}. Suggestions: {1}".format(optinput,\
+                jsondata['query']['searchinfo']['suggestion']))
+            return
+        
+        # iterate through search results and throw into a dict.
+        searchresults = {}
+        for i,result in enumerate(jsondata['query']['search']):
+            tmpdict = {}
+            tmpdict['title'] = result['title'].encode('utf-8')
+            tmpdict['snippet'] = self._removeWikiNoise(result['snippet']).encode('utf-8')
+            searchresults[i] = tmpdict
+        
+        if args['snippets']:
+            irc.reply("Results for {0} :: {1}".format(self._red(optinput),\
+                " | ".join([self._bu(item['title']) + " " + item['snippet'] for item in searchresults.values()])))
+        else:
+            irc.reply("Results for {0} :: {1}".format(self._red(optinput),\
+                " | ".join([item['title'] for item in searchresults.values()])))
+    wikisearch = wrap(wikisearch, [getopts({'num':('int'),'snippets':''}), ('text')])
 
 Class = Wikipedia
 
