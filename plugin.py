@@ -54,6 +54,7 @@ class Wikipedia(callbacks.Plugin):
         """Remove wikipedia cruft in output to display better."""
         wiki = re.sub(r'(?i)\{\{IPA(\-[^\|\{\}]+)*?\|([^\|\{\}]+)(\|[^\{\}]+)*?\}\}', lambda m: m.group(2), wiki)
         wiki = re.sub(r'(?i)\{\{Lang(\-[^\|\{\}]+)*?\|([^\|\{\}]+)(\|[^\{\}]+)*?\}\}', lambda m: m.group(2), wiki)
+        wiki = re.sub(r'Coordinates:.*?\n\n', '',wiki)
         wiki = re.sub(r'\{\{[^\{\}]+\}\}', '', wiki)
         wiki = re.sub(r'(?m)\{\{[^\{\}]+\}\}', '', wiki)
         wiki = re.sub(r'(?m)\{\|[^\{\}]*?\|\}', '', wiki)
@@ -83,17 +84,28 @@ class Wikipedia(callbacks.Plugin):
     
     # wiki stats? http://stats.grok.se
     def wikipedia(self, irc, msg, args, optlist, optinput):
-        """<term>
+        """[--link] <term>
         Searches Wikipedia for <term>. 
+        Use --link to paste a link on irc to the article.
         """
         
+        # first, check for url.
         url = self.registryValue('wikiUrl')
         if not url or url == "Not set":
             irc.reply("wikipedia URL not set. see 'config help supybot.plugins.Wikipedia.wikiUrl'")
             return
         
+        # handle optlist (getopts)
+        args = {'showLink':False}
+        if optlist:
+            for (key, value) in optlist:
+                if key == "link":
+                    args['showLink'] = True
+                    
+        
         # prep url     
-        urlArgs = {'action':'query','prop':'extracts','titles':optinput,'format':'json','redirects':'1','indexpageids':'1','exintro':'1','explaintext':'1'}  
+        urlArgs = {'action':'query','prop':'extracts','titles':optinput,'format':'json','redirects':'1',
+        'indexpageids':'1','exintro':'1','explaintext':'1','meta':'siteinfo'}  
         request = urllib2.Request(url, data=self._unicodeurlencode(urlArgs), headers={'User-agent':'Mozilla/5.0 (Windows NT 6.1; rv:15.0) Gecko/20120716 Firefox/15.0a2'})
         
         # now try to fetch.
@@ -135,6 +147,8 @@ class Wikipedia(callbacks.Plugin):
         # now fill up our objects with text from the page.
         wikipagetitle = jsondata['query']['pages'][pageid]['title']
         wikipagecontent = jsondata['query']['pages'][pageid]['extract']
+        # for links
+        wikilink = 'http:'+jsondata['query']['general']['server']+jsondata['query']['general']['articlepath'].replace('$1',wikipagetitle.replace(' ','_'))
         # cleanup content for output and encode
         outputcontent = self._removeWikiNoise(wikipagecontent).encode('utf-8')
         # prep title for output.
@@ -143,13 +157,16 @@ class Wikipedia(callbacks.Plugin):
         else:
             outputtitle = "{0}".format(self._red(wikipagetitle.encode('utf-8')))
         
+        # handle args
+        if args['showLink']:
+            irc.reply(wikilink)
         # finally, output.
         if self.registryValue('disableANSI'):
             irc.reply(self._strip("{0} :: {1}".format(outputtitle,outputcontent)))
         else:
             irc.reply("{0} :: {1}".format(outputtitle,outputcontent))
         
-    wikipedia = wrap(wikipedia, [getopts({}), ('text')])
+    wikipedia = wrap(wikipedia, [getopts({'link':''}), ('text')])
     
     def wikisearch(self, irc, msg, args, optlist, optinput):
         """[--num #|--snippets|--links] <term>
