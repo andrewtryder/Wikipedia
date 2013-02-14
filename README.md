@@ -35,3 +35,4 @@ Notes
     Some source and examples that helped me in designing the plugin (not limited to):
     - https://raw.github.com/samliu/WikipediaSummaryRetriever/master/wikipedia.py
     - http://en.wikipedia.org/w/api.php
+    - http://medialab.di.unipi.it/wiki/Wikipedia_Extractor
