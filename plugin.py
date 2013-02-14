@@ -11,6 +11,7 @@ import json
 import urllib2
 import re
 from urllib import urlencode
+import socket
 
 # supybot libs
 import supybot.utils as utils
@@ -45,11 +46,11 @@ class Wikipedia(callbacks.Plugin):
             params = params.items()
         return urlencode([(k, isinstance(v, unicode) and v.encode('utf-8') or v) for k, v in params])
 
-    def _fixwikititle(self, s):
+    def _fixwikititle(self, title):
         """Fix Wikipedia title."""
-        s = s.title()
-        s = s.replace(' ','_')
-        return s
+        title = title.title()
+        title = title.replace(' ','_')
+        return title
 
     # http://en.wikipedia.org/wiki/Wikipedia:WikiProject_User_scripts/Scripts/Formatter
     def _removeWikiNoise(self, wiki):
@@ -97,33 +98,38 @@ class Wikipedia(callbacks.Plugin):
             return
 
         # handle optlist (getopts)
-        args = {'showLink':False}
+        args = {'showLink': False}
         if optlist:
-            for (key, value) in optlist:
+            for key in optlist.keys():
                 if key == "link":
                     args['showLink'] = True
 
         # fix title
-        optinput = self._fixwikititle(optinput)
+        optinput = optinput.title()
 
         # prep url
-        urlArgs = {'action':'query','prop':'extracts','titles':optinput,'format':'json','redirects':'1',
-        'indexpageids':'1','exintro':'1','explaintext':'1','meta':'siteinfo'}
-        request = urllib2.Request(url, data=self._unicodeurlencode(urlArgs), headers={'User-agent':'Mozilla/5.0 (Windows NT 6.1; rv:15.0) Gecko/20120716 Firefox/15.0a2'})
+        urlArgs = {'action': 'query', 'prop': 'extracts',
+                   'titles': optinput, 'format': 'json',
+                   'redirects': '1', 'indexpageids': '1',
+                   'exintro': '1', 'explaintext': '1',
+                   'meta': 'siteinfo'}
+        request = urllib2.Request(url,
+                                  data=self._unicodeurlencode(urlArgs),
+                                  headers={'User-agent': 'Mozilla/5.0 (Windows NT 6.1; rv:15.0) Gecko/20120716 Firefox/15.0a2'})
 
         # now try to fetch.
         try:
-            result = urllib2.urlopen(request,timeout=10)
+            result = urllib2.urlopen(request, timeout=10)
         except urllib2.HTTPError, e:
-            self.log.info('ERROR: Cannot open: {0} HTTP Error code: {1} '.format(url,e.code))
+            self.log.info('ERROR: Cannot open: {0} HTTP Error code: {1} '.format(url, e.code))
             irc.reply("HTTP ERROR: {0}".format(e.code))
             return
         except urllib2.URLError, e:
-            self.log.info('ERROR: Cannot open: {0} URL error: {1} '.format(url,e.reason))
+            self.log.info('ERROR: Cannot open: {0} URL error: {1} '.format(url, e.reason))
             irc.reply("URLERROR: {0}".format(e.reason))
             return
         except socket.timeout:
-            irc.reply("Timeout trying to fetch url")
+            irc.reply("ERROR: Socket timeout trying to fetch url")
             return
 
         # process json.
@@ -131,7 +137,7 @@ class Wikipedia(callbacks.Plugin):
 
         # if no errors, move into parse with one last error check.
         if 'query' not in jsondata:
-            self.log.error("Big error looking up {0} url: {1} data: {2}".format(optinput,url,str(jsondata)))
+            self.log.error("Big error looking up {0} url: {1} data: {2}".format(optinput, url, str(jsondata)))
             irc.reply("Big error. Check logs/code.")
             return
 
@@ -151,7 +157,7 @@ class Wikipedia(callbacks.Plugin):
         wikipagetitle = jsondata['query']['pages'][pageid]['title']
         wikipagecontent = jsondata['query']['pages'][pageid]['extract']
         # for links
-        wikilink = 'http:'+jsondata['query']['general']['server']+jsondata['query']['general']['articlepath'].replace('$1',self._fixwikititle(wikipagetitle))
+        wikilink = 'http:'+jsondata['query']['general']['server']+jsondata['query']['general']['articlepath'].replace('$1', self._fixwikititle(wikipagetitle))
         # cleanup content for output and encode
         outputcontent = self._removeWikiNoise(wikipagecontent).encode('utf-8')
         # prep title for output.
@@ -168,7 +174,7 @@ class Wikipedia(callbacks.Plugin):
             irc.reply("{0} :: {1}".format(ircutils.stripFormatting(outputtitle),\
                                                     ircutils.stripFormatting(outputcontent)))
         else:
-            irc.reply("{0} :: {1}".format(outputtitle,outputcontent))
+            irc.reply("{0} :: {1}".format(outputtitle, outputcontent))
 
     wikipedia = wrap(wikipedia, [getopts({'link':''}), ('text')])
 
@@ -186,7 +192,7 @@ class Wikipedia(callbacks.Plugin):
             return
 
         # arguments for output
-        args = {'num':self.registryValue('numberOfSearchResults'),'snippets':False,'links':False}
+        args = {'num': self.registryValue('numberOfSearchResults'), 'snippets': False, 'links': False}
 
         # manip args via getopts (optlist)
         if optlist:
@@ -203,8 +209,12 @@ class Wikipedia(callbacks.Plugin):
                     args['links'] = True
 
         # prep url
-        urlArgs = {'action':'query','list':'search','srsearch':optinput,'srwhat':'text','srlimit':args['num'],'format':'json','srprop':'snippet','meta':'siteinfo'}
-        request = urllib2.Request(url, data=self._unicodeurlencode(urlArgs), headers={'User-agent':'Mozilla/5.0 (Windows NT 6.1; rv:15.0) Gecko/20120716 Firefox/15.0a2'})
+        urlArgs = {'action': 'query', 'list': 'search', 'srsearch':optinput,
+                   'srwhat': 'text', 'srlimit': args['num'], 'format': 'json',
+                   'srprop': 'snippet','meta': 'siteinfo'}
+        request = urllib2.Request(url,
+                                  data=self._unicodeurlencode(urlArgs),
+                                  headers={'User-agent':'Mozilla/5.0 (Windows NT 6.1; rv:15.0) Gecko/20120716 Firefox/15.0a2'})
 
         # now try to fetch.
         try:
@@ -218,7 +228,7 @@ class Wikipedia(callbacks.Plugin):
             irc.reply("URLERROR: {0}".format(e.reason))
             return
         except socket.timeout:
-            irc.reply("Timeout trying to fetch url")
+            irc.reply("ERROR: Socket timeout trying to fetch url")
             return
 
         # process json.
@@ -226,7 +236,7 @@ class Wikipedia(callbacks.Plugin):
 
         # if no errors, move into parse with one last error check.
         if 'query' not in jsondata:
-            self.log.error("Big error looking up {0} url: {1} data: {2}".format(optinput,url,str(jsondata)))
+            self.log.error("Big error looking up {0} url: {1} data: {2}".format(optinput, url, str(jsondata)))
             irc.reply("Big error. Check logs/code.")
             return
 
