@@ -21,11 +21,17 @@ Commands
 Suggestions
 
     /msg <bot> Alias add wiki wikipedia
-    
+
 Example
 
     <me> wikipedia Germany
-    <bot> Germany :: Germany, officially the Federal Republic of Germany (German: Bundesrepublik Deutschland, pronounced ˈdɔʏtʃlant ), 
+    <bot> Germany :: Germany, officially the Federal Republic of Germany (German: Bundesrepublik Deutschland, pronounced ˈdɔʏtʃlant ),
     is a federal parliamentary republic in west-central Europe. The country consists of 16 states, and its capital and largest city is
     Berlin. Germany covers an area of 357,021 square kilometres (137,847 sqmi) and has a largely temperate seasonal climate.
     With 81.8 million (7 more messages)
+
+Notes
+
+    Some source and examples that helped me in designing the plugin (not limited to):
+    - https://raw.github.com/samliu/WikipediaSummaryRetriever/master/wikipedia.py
+    - http://en.wikipedia.org/w/api.php
