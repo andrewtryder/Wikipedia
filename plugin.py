@@ -12,6 +12,8 @@ import urllib2
 import re
 from urllib import urlencode
 import socket
+from gzip import GzipFile
+from cStringIO import StringIO
 
 # supybot libs
 import supybot.utils as utils
@@ -97,17 +99,17 @@ class Wikipedia(callbacks.Plugin):
             irc.reply("wikipedia URL not set. see 'config help supybot.plugins.Wikipedia.wikiUrl'")
             return
 
-        # handle optlist (getopts)
+        # handle optlist (getopts).
         args = {'showLink': False}
         if optlist:
             for key in optlist.keys():
                 if key == "link":
                     args['showLink'] = True
 
-        # fix title
+        # fix title.
         optinput = optinput.title()
 
-        # prep url
+        # prep url.
         urlArgs = {'action': 'query', 'prop': 'extracts',
                    'titles': optinput, 'format': 'json',
                    'redirects': '1', 'indexpageids': '1',
@@ -116,6 +118,7 @@ class Wikipedia(callbacks.Plugin):
         request = urllib2.Request(url,
                                   data=self._unicodeurlencode(urlArgs),
                                   headers={'User-agent': 'Mozilla/5.0 (Windows NT 6.1; rv:15.0) Gecko/20120716 Firefox/15.0a2'})
+        request.add_header('Accept-encoding', 'gzip')
 
         # now try to fetch.
         try:
@@ -132,8 +135,12 @@ class Wikipedia(callbacks.Plugin):
             irc.reply("ERROR: Socket timeout trying to fetch url")
             return
 
-        # process json.
-        jsondata = json.loads(result.read().encode('utf-8'))
+        # process json. handle gzip if needed.
+        if result.info().get('Content-Encoding') == 'gzip':
+            data = gzip.GzipFile(fileobj=StringIO(result.read())).read()
+            jsondata = json.loads(data.encode('utf-8'))
+        else:
+            jsondata = json.loads(result.read().encode('utf-8'))
 
         # if no errors, move into parse with one last error check.
         if 'query' not in jsondata:
@@ -147,7 +154,7 @@ class Wikipedia(callbacks.Plugin):
             irc.reply("ERROR: I could not find a result on Wikipedia for {0}. Try wikisearch.".format(optinput))
             return
 
-        # handle redirects
+        # handle redirects.
         if 'redirects' in jsondata['query']:
             redirectsfrom = jsondata['query']['redirects'][0]['from']
         else:
@@ -156,9 +163,9 @@ class Wikipedia(callbacks.Plugin):
         # now fill up our objects with text from the page.
         wikipagetitle = jsondata['query']['pages'][pageid]['title']
         wikipagecontent = jsondata['query']['pages'][pageid]['extract']
-        # for links
+        # for links.
         wikilink = 'http:'+jsondata['query']['general']['server']+jsondata['query']['general']['articlepath'].replace('$1', self._fixwikititle(wikipagetitle))
-        # cleanup content for output and encode
+        # cleanup content for output and encode.
         outputcontent = self._removeWikiNoise(wikipagecontent).encode('utf-8')
         # prep title for output.
         if redirectsfrom:
@@ -215,6 +222,7 @@ class Wikipedia(callbacks.Plugin):
         request = urllib2.Request(url,
                                   data=self._unicodeurlencode(urlArgs),
                                   headers={'User-agent':'Mozilla/5.0 (Windows NT 6.1; rv:15.0) Gecko/20120716 Firefox/15.0a2'})
+        request.add_header('Accept-encoding', 'gzip')
 
         # now try to fetch.
         try:
@@ -231,8 +239,12 @@ class Wikipedia(callbacks.Plugin):
             irc.reply("ERROR: Socket timeout trying to fetch url")
             return
 
-        # process json.
-        jsondata = json.loads(result.read().encode('utf-8'))
+        # process json. (handle gzip if needed)
+        if result.info().get('Content-Encoding') == 'gzip':
+            data = gzip.GzipFile(fileobj=StringIO(result.read())).read()
+            jsondata = json.loads(data.encode('utf-8'))
+        else:
+            jsondata = json.loads(result.read().encode('utf-8'))
 
         # if no errors, move into parse with one last error check.
         if 'query' not in jsondata:
