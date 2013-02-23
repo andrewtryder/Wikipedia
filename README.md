@@ -36,3 +36,4 @@ Notes
     - https://raw.github.com/samliu/WikipediaSummaryRetriever/master/wikipedia.py
     - http://en.wikipedia.org/w/api.php
     - http://medialab.di.unipi.it/wiki/Wikipedia_Extractor
+    - https://github.com/theY4Kman/Yakbot-plugins/blob/faac0bd4fb2599c8adf5aab583ce986aafa037c7/Wikipedia/plugin.py
