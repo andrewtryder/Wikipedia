@@ -24,7 +24,6 @@ Wikipedia = conf.registerPlugin('Wikipedia')
 conf.registerGlobalValue(Wikipedia,'disableANSI',registry.Boolean(False, """Do not display any ANSI (color/bold) in output."""))
 conf.registerGlobalValue(Wikipedia,'numberOfSearchResults',registry.Integer(10, """Max number of search results for Wikipedia. Defaults to 10."""))
 conf.registerGlobalValue(Wikipedia,'wikiUrl',registry.String('http://en.wikipedia.org/w/api.php', """URL of the website from where you want to pull pages (usually: your language's wikipedia)"""))
-conf.registerGlobalValue(Wikipedia,'showDetailed',registry.Boolean(False, """Use detailed lookup for wikipedia query by default?"""))
 conf.registerGlobalValue(Wikipedia,'showLink',registry.Boolean(False, """Show wikipedia link after displaying entry on query?"""))
 
 # vim:set shiftwidth=4 tabstop=4 expandtab textwidth=250:
