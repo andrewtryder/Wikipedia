@@ -159,9 +159,8 @@ class Wikipedia(callbacks.Plugin):
             return ('0', items)
 
     def wikipedia(self, irc, msg, args, optlist, optinput):
-        """[--detailed|--link] <term>
+        """[--link] <term>
         Searches Wikipedia for <term>.
-        Use --detailed to show a detailed and more comprehensive entry.
         Use --link to display wikipedia link after entry.
         """
 
@@ -182,7 +181,7 @@ class Wikipedia(callbacks.Plugin):
             irc.reply("ERROR :: {0}".format(results[1]))
             return
 
-        # main logic if we go detailed.
+        # main logic.
         results = self._wikiquery(results[1][0]['text'])
         if results[0] == 'error':
             irc.reply("ERROR :: {0}".format(results[1]))
@@ -192,12 +191,7 @@ class Wikipedia(callbacks.Plugin):
 
         if self.registryValue('disableANSI'):
             irc.reply("{0} :: {1}".format(results['text'], results['description']))
-            #output = "%s :: %s" % (results['text'], results['description'])
-            #irc.reply(output)
         else:
-            #output = "%s :: %s" % (self._red(results['text']), results['description'])
-            #output = u"%s :: %s" % (results['text'], results['description'])
-            #irc.reply(results['description'])
             irc.reply("{0} :: {1}".format(self._red(results['text']), results['description']))
 
         if args['link']:
