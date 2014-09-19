@@ -73,7 +73,7 @@ class Wikipedia(callbacks.Plugin):
         wiki = re.sub(r'(?m)<.*?>', '', wiki)
         wiki = re.sub(r'(?i)&amp;', '&', wiki)
         #Remove -
-        wiki = wiki.replace(u'–','-')
+        wiki = wiki.replace('–','-')
         #Remove trailing white spaces
         wiki = ' '.join(wiki.split())
         return wiki
@@ -111,12 +111,14 @@ class Wikipedia(callbacks.Plugin):
 
         # grab XML content from MediaWiki API.
         html = root.find('query/pages/page/extract').text
+        html = unicode(html).encode('utf-8')
         title = root.find('query/pages/page').attrib['title']
+        title = unicode(title).encode('utf-8')
         articleserver = root.find('query/general').attrib['server']
         articlepath = root.find('query/general').attrib['articlepath']
         wikilink = "http:{0}{1}".format(articleserver, articlepath.replace('$1', title.replace(' ', '_')))  # concat wikilink.
         html = self._removeWikiNoise(html)  # clean html.
-        outputcontent = {'text': unicode(title).encode('utf-8'), 'description': unicode(html).encode('utf-8'), 'link': wikilink}
+        outputcontent = {'text': title, 'description': html, 'link': wikilink}
         return ('0', outputcontent)
 
     def _opensearch(self, opttopic, optnum):
