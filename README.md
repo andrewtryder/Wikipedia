@@ -1,39 +1,49 @@
-Supybot-Wikipedia
-=================
+[![Build Status](https://travis-ci.org/reticulatingspline/Wikipedia.svg?branch=master)](https://travis-ci.org/reticulatingspline/Wikipedia)
 
-Purpose
+# Limnoria plugin for Wikipedia
 
-    Supybot plugin for Wikipedia to query wiki entires and also search.
+## Introduction
 
-Instructions
+This is a Limnoria plugin to query and search Wikipedia.
 
-    Should work fine in python 2.6+. Does not use any non-standard modules.
-    There are a few config variables (/msg <bot> config search wikipedia) but
-    should be fine by default. Searches Wikipedia using their API. You can change
-    the base URL to get a different language/use a different MediaWiki location if needed.
-    Note: some entries might not display properly.
+## Install
 
-Commands
+You will need a working Limnoria bot on Python 2.7 for this to work.
 
-    - wikipedia <term>
-    - wikisearch [--options] <term>
+Go into your Limnoria plugin dir, usually ~/supybot/plugins and run:
 
-Suggestions
+```
+git clone https://github.com/reticulatingspline/Wikipedia
+```
 
-    /msg <bot> Alias add wiki wikipedia
+To install additional requirements, run:
 
-Example
+```
+pip install -r requirements.txt 
+```
 
-    <me> wikipedia Germany
-    <bot> Germany :: Germany, officially the Federal Republic of Germany (German: Bundesrepublik Deutschland, pronounced ˈdɔʏtʃlant ),
-    is a federal parliamentary republic in west-central Europe. The country consists of 16 states, and its capital and largest city is
-    Berlin. Germany covers an area of 357,021 square kilometres (137,847 sqmi) and has a largely temperate seasonal climate.
-    With 81.8 million (7 more messages)
+Next, load the plugin:
 
-Notes
+```
+/msg bot load Wikipedia
+```
 
-    Some source and examples that helped me in designing the plugin (not limited to):
-    - https://raw.github.com/samliu/WikipediaSummaryRetriever/master/wikipedia.py
-    - http://en.wikipedia.org/w/api.php
-    - http://medialab.di.unipi.it/wiki/Wikipedia_Extractor
-    - https://github.com/theY4Kman/Yakbot-plugins/blob/faac0bd4fb2599c8adf5aab583ce986aafa037c7/Wikipedia/plugin.py
+You should be good to go.
+
+## Example Usage
+
+```
+<spline> @wikipedia IRC
+<myybot> Internet Relay Chat :: Internet Relay Chat (IRC) is an application layer protocol that facilitates transfer ..
+<spline> @wikisearch IRC
+<myybot> Search results for IRC :: Internet Relay Chat | IRCAM | IRCON International | IRCd ...
+```
+
+## About
+
+All of my plugins are free and open source. When I first started out, one of the main reasons I was
+able to learn was due to other code out there. If you find a bug or would like an improvement, feel
+free to give me a message on IRC or fork and submit a pull request. Many hours do go into each plugin,
+so, if you're feeling generous, I do accept donations via Amazon or browse my [wish list](http://amzn.com/w/380JKXY7P5IKE).
+
+I'm always looking for work, so if you are in need of a custom feature, plugin or something bigger, contact me via GitHub or IRC.
