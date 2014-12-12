@@ -131,6 +131,7 @@ class Wikipedia(callbacks.Plugin):
                   'search': opttopic}
         request_url = url + '?' + self._unicodeurlencode(urlArgs)
         headers={'User-agent': 'Mozilla/5.0 (Windows NT 6.1; rv:15.0) Gecko/20120716 Firefox/15.0a2'}
+        self.log.info("{0}".format(request_url))
 
         # try and fetch url.
         try:
@@ -154,7 +155,7 @@ class Wikipedia(callbacks.Plugin):
         else:
             items = [{
                 'text': unicode(item.find('%sText' % ns).text).encode('utf-8'),
-                'description': unicode(item.find('%sDescription' % ns).text).encode('utf-8'),
+                #'description': unicode(item.find('%sTe' % ns).text).encode('utf-8'),
                 'link': unicode(item.find('%sUrl' % ns).text).encode('utf-8')
             } for item in items]
 
@@ -205,7 +206,7 @@ class Wikipedia(callbacks.Plugin):
         """[--num #|--snippets|--link] <term>
         Perform a Wikipedia search for <term>
         Use --num (between 10 and 30) to specify results.
-        Use --snippets to display text snippets. (NOTICE: is rather verbose..)
+        Use --snippets to display text snippets. BROKEN
         Use --link to display a link to each article.
         """
 
@@ -243,8 +244,8 @@ class Wikipedia(callbacks.Plugin):
         output = []
         for wikiresult in wikiresults:
             tmpstring = wikiresult['text'].encode('utf-8')
-            if args['snippets']:
-                tmpstring += " - {0}".format(utils.str.normalizeWhitespace(wikiresult['description'].strip()))
+            #if args['snippets']:
+            #    tmpstring += " - {0}".format(utils.str.normalizeWhitespace(wikiresult['description'].strip()))
             if args['link']:
                 tmpstring += " < {0} >".format(wikiresult['link'])
             output.append(tmpstring)
