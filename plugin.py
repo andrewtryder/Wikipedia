@@ -1,14 +1,13 @@
 # -*- coding: utf-8 -*-
 ###
-# Copyright (c) 2013, spline
+# Copyright (c) 2013-2015, spline
 # All rights reserved.
 #
 #
 ###
-
+from __future__ import unicode_literals
 # my libs
 import re
-from collections import defaultdict
 import wikipedia
 # supybot libs
 import supybot.utils as utils
@@ -34,46 +33,13 @@ class Wikipedia(callbacks.Plugin):
         """bold and underline string."""
         return ircutils.bold(ircutils.underline(string))
 
-    def _unicodeurlencode(self, params):
+    def _wf(self, s):
         """
-        A unicode aware version of urllib.urlencode.
-        Borrowed from pyfacebook :: http://github.com/sciyoshi/pyfacebook/
+        Fix up string for output.
         """
-        if isinstance(params, dict):
-            params = params.items()
-        return utils.web.urlencode([(k, isinstance(v, unicode) and v.encode('utf-8') or v) for k, v in params])
 
-    def _removeWikiNoise(self, wiki):
-        """Remove wikipedia cruft in output to display better."""
-        wiki = re.sub(r'(?i)\{\{IPA(\-[^\|\{\}]+)*?\|([^\|\{\}]+)(\|[^\{\}]+)*?\}\}', lambda m: m.group(2), wiki)
-        wiki = re.sub(r'(?i)\{\{Lang(\-[^\|\{\}]+)*?\|([^\|\{\}]+)(\|[^\{\}]+)*?\}\}', lambda m: m.group(2), wiki)
-        wiki = re.sub(r'Coordinates:.*?\n\n', '',wiki)
-        wiki = re.sub(r'\{\{[^\{\}]+\}\}', '', wiki)
-        wiki = re.sub(r'(?m)\{\{[^\{\}]+\}\}', '', wiki)
-        wiki = re.sub(r'(?m)\{\|[^\{\}]*?\|\}', '', wiki)
-        wiki = re.sub(r'\(.?\[Image\].*?\)', '', wiki)
-        wiki = re.sub(r'\s\(.*?\[Listen\].*?\)', '', wiki)
-        wiki = re.sub(r'(?i)\[\[Image:[^\[\]]*?\]\]', '', wiki)
-        wiki = re.sub(r'(?i)\[\[File:[^\[\]]*?\]\]', '', wiki)
-        wiki = re.sub(r'\[\[[^\[\]]*?\|([^\[\]]*?)\]\]', lambda m: m.group(1), wiki)
-        wiki = re.sub(r'\[\[([^\[\]]+?)\]\]', lambda m: m.group(1), wiki)
-        wiki = re.sub(r'\[\[([^\[\]]+?)\]\]', '', wiki)
-        wiki = re.sub(r'(?i)File:[^\[\]]*?', '', wiki)
-        wiki = re.sub(r'\[[^\[\]]*? ([^\[\]]*?)\]', lambda m: m.group(1), wiki)
-        wiki = re.sub(r"''+", '', wiki)
-        wiki = re.sub(r'(?m)^\*$', '', wiki)
-        #Remove HTML from the text.
-        wiki = re.sub(r'(?i)&nbsp;', ' ', wiki)
-        wiki = re.sub(r'(?i)<br[ \\]*?>', '\n', wiki)
-        wiki = re.sub(r'(?m)<!--.*?--\s*>', '', wiki)
-        wiki = re.sub(r'(?i)<ref[^>]*>[^>]*<\/ ?ref>', '', wiki)
-        wiki = re.sub(r'(?m)<.*?>', '', wiki)
-        wiki = re.sub(r'(?i)&amp;', '&', wiki)
-        #Remove -
-        wiki = wiki.replace('–', '-')
-        #Remove trailing white spaces
-        wiki = ' '.join(wiki.split())
-        return wiki
+        s = s.replace('\n', '')
+        return s
 
     ###################
     # PUBLIC COMMANDS #
@@ -114,15 +80,15 @@ class Wikipedia(callbacks.Plugin):
             irc.reply("ERROR: {0} yielded a error. Suggestions: {1}".format(query, e))
             return
         # now if we did get a page, lets print the summary.
-        title = wp.title.encode('utf-8')
-        content = wp.content.encode('utf-8')
+        title = wp.title
+        content = self._wf(wp.content)
         # output.
         if self.registryValue('disableANSI'):
             irc.reply("{0} :: {1}".format(title, content))
         else:
-            irc.reply("{0} :: {1}".format(title, content))
+            irc.reply("{0} :: {1}".format(self._red(title), content))
 
-    wikipedia = wrap(wikipedia, [getopts({'lengh': ('int')}), ('text')])
+    wikipedia = wrap(wikipedia, [getopts({'length': ('int')}), ('text')])
 
 
 Class = Wikipedia
