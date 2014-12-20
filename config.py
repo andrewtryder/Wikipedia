@@ -1,8 +1,5 @@
 ###
-# Copyright (c) 2013-2015, spline
-# All rights reserved.
-#
-#
+# see LICENSE.txt file for details.
 ###
 
 import supybot.conf as conf
@@ -22,7 +19,6 @@ def configure(advanced):
 
 Wikipedia = conf.registerPlugin('Wikipedia')
 conf.registerGlobalValue(Wikipedia, 'disableANSI', registry.Boolean(False, """Do not display any ANSI in output."""))
-conf.registerGlobalValue(Wikipedia, 'numberOfSearchResults', registry.Integer(10, """Max number of search results."""))
 conf.registerGlobalValue(Wikipedia, 'lang', registry.String('en', """output language"""))
 
 

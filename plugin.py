@@ -1,10 +1,7 @@
-# -*- coding: utf-8 -*-
 ###
-# Copyright (c) 2013-2015, spline
-# All rights reserved.
-#
-#
+# see LICENSE.txt file for details.
 ###
+
 from __future__ import unicode_literals
 # my libs
 import re
