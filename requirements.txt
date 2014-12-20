@@ -1,1 +1,2 @@
 git+https://github.com/ProgVal/Limnoria.git
+wikipedia==1.4.0

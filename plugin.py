@@ -9,10 +9,7 @@
 # my libs
 import re
 from collections import defaultdict
-try:
-    import xml.etree.cElementTree as ElementTree
-except ImportError:
-    import xml.etree.ElementTree as ElementTree
+import wikipedia
 # supybot libs
 import supybot.utils as utils
 from supybot.commands import *
@@ -73,186 +70,60 @@ class Wikipedia(callbacks.Plugin):
         wiki = re.sub(r'(?m)<.*?>', '', wiki)
         wiki = re.sub(r'(?i)&amp;', '&', wiki)
         #Remove -
-        wiki = wiki.replace('–','-')
+        wiki = wiki.replace('–', '-')
         #Remove trailing white spaces
         wiki = ' '.join(wiki.split())
         return wiki
 
-    def _wikiquery(self, opttopic):
-        """Perform Wikipedia Query."""
+    ###################
+    # PUBLIC COMMANDS #
+    ###################
 
-        # prep url.
-        url = self.registryValue('wikiUrl')
-        urlArgs = {'action': 'query', 'prop': 'extracts',
-                   'titles': opttopic, 'format': 'xml',
-                   'redirects': '1', 'indexpageids': '1',
-                   'exintro': '1', 'explaintext': '1',
-                   'meta': 'siteinfo'}
-        request_url = url + '?' + self._unicodeurlencode(urlArgs)
-        headers={'User-agent': 'Mozilla/5.0 (Windows NT 6.1; rv:15.0) Gecko/20120716 Firefox/15.0a2'}
+    def wikipedia(self, irc, msg, args, optlist, query):
+        """<query>
 
-        # try and fetch url.
-        try:
-            result = utils.web.getUrl(request_url, headers=headers)
-        except utils.web.Error as error:
-            self.log.info("I could not open {0} error: {1}".format(request_url, error))
-            return ('error', error)
-
-        # parse XML.
-        try:
-            root = ElementTree.fromstring(result)
-        except ElementTree.ParseError as error:
-            return ('error', "Error parsing {0}: {1}".format(request_url, error))
-
-        # first parse XML for errors.
-        if root.find('query/error'):
-            self.log.info("ERROR on wikiquery for {0}: {1}".format(opttopic, root.find('query/error/info')))
-            return ('error', "{0} :: {1}".format(root.find('query/error/code'), root.find('query/error/info')))
-
-        # grab XML content from MediaWiki API.
-        html = root.find('query/pages/page/extract').text
-        html = unicode(html).encode('utf-8')
-        title = root.find('query/pages/page').attrib['title']
-        title = unicode(title).encode('utf-8')
-        articleserver = root.find('query/general').attrib['server']
-        articlepath = root.find('query/general').attrib['articlepath']
-        wikilink = "http:{0}{1}".format(articleserver, articlepath.replace('$1', title.replace(' ', '_')))  # concat wikilink.
-        html = self._removeWikiNoise(html)  # clean html.
-        outputcontent = {'text': title, 'description': html, 'link': wikilink}
-        return ('0', outputcontent)
-
-    def _opensearch(self, opttopic, optnum):
-        """Query Mediawiki OpenSearch for topics."""
-
-        # prep url.
-        url = self.registryValue('wikiUrl')
-        urlArgs = {'action': 'opensearch', 'limit': optnum,
-                  'format': 'xml', 'namespace': '0',
-                  'search': opttopic}
-        request_url = url + '?' + self._unicodeurlencode(urlArgs)
-        headers={'User-agent': 'Mozilla/5.0 (Windows NT 6.1; rv:15.0) Gecko/20120716 Firefox/15.0a2'}
-        self.log.info("{0}".format(request_url))
-
-        # try and fetch url.
-        try:
-            result = utils.web.getUrl(request_url, headers=headers)
-        except utils.web.Error as error:
-            self.log.info("I could not open {0} error: {1}".format(request_url, error))
-            return ('error', error)
-
-        # parse XML.
-        try:
-            root = ElementTree.fromstring(result)
-        except ElementTree.ParseError as error:
-            return ('error', "Error parsing {0}: {1}".format(request_url, error))
-
-        # find the first item.
-        ns = '{http://opensearch.org/searchsuggest2}'
-        section = root.find('%sSection' % ns)
-        items = section.findall('%sItem' % ns)
-        if len(items) < 1:
-            return ('error', "No results found for {0}".format(opttopic))
-        else:
-            items = [{
-                'text': unicode(item.find('%sText' % ns).text).encode('utf-8'),
-                #'description': unicode(item.find('%sTe' % ns).text).encode('utf-8'),
-                'link': unicode(item.find('%sUrl' % ns).text).encode('utf-8')
-            } for item in items]
-
-            return ('0', items)
-
-    def wikipedia(self, irc, msg, args, optlist, optinput):
-        """[--link] <term>
-        Searches Wikipedia for <term>.
-        Use --link to display wikipedia link after entry.
+        Display Wikipedia entry.
         """
 
-        # first, check if we have a url.
-        if not self.registryValue('wikiUrl') or self.registryValue('wikiUrl') == "Not set":
-            irc.reply("wikipedia URL not set. see 'config help supybot.plugins.Wikipedia.wikiUrl'")
-            return
-
+        # handle optlist.
+        lang = self.registryValue('lang')
         # handle getopts.
-        args = {'link': self.registryValue('showLink')}
+        args = {}
+        args['link'] = False
+        args['length'] = 400
+        # iterate over them.
         for (key, value) in optlist:
             if key == 'link':
                 args['link'] = True
+            if key == 'length':
+                if value > 400:
+                    value = 400
+                elif value < 1:
+                    value = 400
+                args['length'] = value
 
-        # do the search.
-        results = self._opensearch(optinput, 1)
-        if results[0] == 'error':
-            irc.reply("ERROR :: {0}".format(results[1]))
+        try:
+            # grab default language via config.
+            wikipedia.set_lang(lang)
+            wp = wikipedia.page(query)
+        # check if its a disambig.
+        except wikipedia.exceptions.DisambiguationError as e:
+            irc.reply("ERROR: {0} yielded a disambiguation page. Suggestions: {1}".format(query, e.options))
             return
-
-        # main logic.
-        results = self._wikiquery(results[1][0]['text'])
-        if results[0] == 'error':
-            irc.reply("ERROR :: {0}".format(results[1]))
+        except wikipedia.exceptions.PageError as e:
+            irc.reply("ERROR: {0} yielded a error. Suggestions: {1}".format(query, e))
             return
-        else:
-            results = results[1]
-
+        # now if we did get a page, lets print the summary.
+        title = wp.title.encode('utf-8')
+        content = wp.content.encode('utf-8')
+        # output.
         if self.registryValue('disableANSI'):
-            irc.reply("{0} :: {1}".format(results['text'], results['description']))
+            irc.reply("{0} :: {1}".format(title, content))
         else:
-            irc.reply("{0} :: {1}".format(self._red(results['text']), results['description']))
+            irc.reply("{0} :: {1}".format(title, content))
 
-        if args['link']:
-            irc.reply("{0}".format(results['link']))
+    wikipedia = wrap(wikipedia, [getopts({'lengh': ('int')}), ('text')])
 
-    wikipedia = wrap(wikipedia, [getopts({'detailed':'', 'link':''}), ('text')])
-
-    def wikisearch(self, irc, msg, args, optlist, optinput):
-        """[--num #|--snippets|--link] <term>
-        Perform a Wikipedia search for <term>
-        Use --num (between 10 and 30) to specify results.
-        Use --snippets to display text snippets. BROKEN
-        Use --link to display a link to each article.
-        """
-
-        # make sure we have a url.
-        url = self.registryValue('wikiUrl')
-        if not url or url == "Not set":
-            irc.reply("wikipedia URL not set. see 'config help supybot.plugins.Wikipedia.wikiUrl'")
-            return
-
-        # arguments for output.
-        args = {'num': self.registryValue('numberOfSearchResults'), 'snippets': False, 'link': False}
-
-        # manip args via getopts (optlist)
-        if optlist:
-            for (key, value) in optlist:
-                if key == "num":
-                    if 10 <= value <= 30:
-                        args['num'] = value
-                    else:
-                        irc.reply("ERROR: wikisearch --num must be between 10 and 30.")
-                        return
-                if key == "snippets":
-                    args['snippets'] = True
-                if key == "link":
-                    args['link'] = True
-
-        # do the search.
-        results = self._opensearch(optinput, args['num'])
-        if results[0] == 'error':
-           irc.reply("ERROR :: {0}".format(results[1]))
-           return
-
-        # now format the results into a list for output.
-        wikiresults = results[1]
-        output = []
-        for wikiresult in wikiresults:
-            tmpstring = wikiresult['text'].encode('utf-8')
-            #if args['snippets']:
-            #    tmpstring += " - {0}".format(utils.str.normalizeWhitespace(wikiresult['description'].strip()))
-            if args['link']:
-                tmpstring += " < {0} >".format(wikiresult['link'])
-            output.append(tmpstring)
-
-        irc.reply("Search results for {0} :: {1}".format(optinput, " | ".join(output)))
-
-    wikisearch = wrap(wikisearch, [getopts({'num': ('int'), 'link': '', 'snippets': ''}), ('text')])
 
 Class = Wikipedia
 
