@@ -71,7 +71,7 @@ class Wikipedia(callbacks.Plugin):
             wp = wikipedia.page(query)
         # check if its a disambig.
         except wikipedia.exceptions.DisambiguationError as e:
-            irc.reply("ERROR: {0} yielded a disambiguation page. Suggestions: {1}".format(query, ", ".join([i for i in e.options})))
+            irc.reply("ERROR: {0} yielded a disambiguation page. Suggestions: {1}".format(query, ", ".join([i for i in e.options])))
             return
         except wikipedia.exceptions.PageError as e:
             irc.reply("ERROR: {0} yielded a error. Suggestions: {1}".format(query, e))
