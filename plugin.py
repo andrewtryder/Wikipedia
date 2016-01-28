@@ -76,6 +76,9 @@ class Wikipedia(callbacks.Plugin):
         except wikipedia.exceptions.PageError as e:
             irc.reply("ERROR: {0} yielded a error. Suggestions: {1}".format(query, e))
             return
+        except Exception as e:
+            irc.reply("ERROR: {0} yielded an unhandled error :: {1}".format(query, e))
+            return
         # now if we did get a page, lets print the summary.
         title = wp.title
         content = self._wf(wp.content)
